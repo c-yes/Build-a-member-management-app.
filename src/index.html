@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <title>회원 관리 시스템</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- 사이드바 -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1 class="app-title">회원 관리</h1>
+      <button class="btn btn-primary btn-add" id="btnAddMember">+ 회원 등록</button>
+    </div>
+
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="이름, 거주지, 직업으로 검색..." />
+    </div>
+
+    <div class="member-list-header">
+      <span id="memberCount">0명</span>
+      <button class="btn btn-sm btn-ghost" id="btnAlarmTest" title="알람 체크">🔔</button>
+    </div>
+
+    <ul class="member-list" id="memberList">
+      <!-- 동적으로 생성 -->
+    </ul>
+
+    <div class="sidebar-footer">
+      <button class="btn btn-sm btn-ghost" id="btnOpenFolder">📁 데이터 폴더 열기</button>
+    </div>
+  </aside>
+
+  <!-- 메인 콘텐츠 -->
+  <main class="main-content">
+    <!-- 빈 상태 -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">👤</div>
+      <h2>회원을 선택하거나 등록하세요</h2>
+      <p>왼쪽 목록에서 회원을 선택하거나<br/>+ 회원 등록 버튼으로 새 회원을 추가하세요.</p>
+      <button class="btn btn-primary" id="btnAddMemberEmpty">+ 첫 회원 등록하기</button>
+    </div>
+
+    <!-- 회원 상세 뷰 -->
+    <div class="member-detail" id="memberDetail" style="display:none;">
+      <div class="detail-header">
+        <div class="detail-title-area">
+          <h2 class="detail-name" id="detailName"></h2>
+          <div class="detail-badges">
+            <span class="badge badge-masked" id="detailMaskedName"></span>
+            <span class="badge badge-date" id="detailAddedDate"></span>
+            <span class="badge" id="detailIntroStatus"></span>
+          </div>
+        </div>
+        <div class="detail-actions">
+          <button class="btn btn-success" id="btnMarkIntroduced">소개 완료 처리</button>
+          <button class="btn btn-secondary" id="btnCopyProfile">📋 프로필 복사</button>
+          <button class="btn btn-primary" id="btnEditMember">✏️ 수정</button>
+          <button class="btn btn-danger" id="btnDeleteMember">🗑️ 삭제</button>
+        </div>
+      </div>
+
+      <!-- 포맷된 프로필 미리보기 -->
+      <div class="profile-preview" id="profilePreview"></div>
+
+      <!-- 이성상 -->
+      <div class="ideal-type-section" id="idealTypeSection" style="display:none;">
+        <h3>이성상</h3>
+        <div class="ideal-type-content" id="idealTypeContent"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 회원 등록/수정 모달 -->
+  <div class="modal-overlay" id="modalOverlay" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">회원 등록</h2>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="memberForm">
+          <!-- 기본 정보 -->
+          <section class="form-section">
+            <h3>기본 정보</h3>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="inputName">이름 <span class="required">*</span></label>
+                <input type="text" id="inputName" placeholder="예: 신지원" required />
+                <small class="form-hint">마스킹 이름(신**)은 자동 생성됩니다</small>
+              </div>
+              <div class="form-group">
+                <label for="inputBirthYear">출생연도</label>
+                <input type="text" id="inputBirthYear" placeholder="예: 96년생 / 1996" />
+              </div>
+              <div class="form-group">
+                <label for="inputResidence">거주지</label>
+                <input type="text" id="inputResidence" placeholder="예: 미국, 서울 강남" />
+              </div>
+              <div class="form-group">
+                <label for="inputHometown">본가</label>
+                <input type="text" id="inputHometown" placeholder="예: 삼성동" />
+              </div>
+              <div class="form-group">
+                <label for="inputHeight">신장</label>
+                <input type="text" id="inputHeight" placeholder="예: 168cm" />
+              </div>
+              <div class="form-group">
+                <label for="inputReligion">종교</label>
+                <input type="text" id="inputReligion" placeholder="예: 기독교, 무교" />
+              </div>
+              <div class="form-group form-group-full">
+                <label for="inputHobbies">취미</label>
+                <input type="text" id="inputHobbies" placeholder="예: 첼로, 헬스, 독서" />
+              </div>
+            </div>
+          </section>
+
+          <!-- 학력 -->
+          <section class="form-section">
+            <h3>학력</h3>
+            <div id="educationList">
+              <!-- 동적으로 추가 -->
+            </div>
+            <button type="button" class="btn btn-sm btn-outline" id="btnAddEducation">+ 학력 추가</button>
+          </section>
+
+          <!-- 가족 관계 -->
+          <section class="form-section">
+            <h3>가족 관계</h3>
+            <div class="form-grid">
+              <div class="form-group form-group-full">
+                <label for="inputSiblings">형제관계</label>
+                <input type="text" id="inputSiblings" placeholder="예: 1남 1녀 중 둘째" />
+              </div>
+              <div class="form-group form-group-full">
+                <label for="inputFather">부 (아버지)</label>
+                <input type="text" id="inputFather" placeholder="예: 고려대. 조지워싱턴 졸. 현)사업" />
+              </div>
+              <div class="form-group form-group-full">
+                <label for="inputMother">모 (어머니)</label>
+                <input type="text" id="inputMother" placeholder="예: KIST 졸. 전)교수" />
+              </div>
+              <div class="form-group form-group-full">
+                <label for="inputOtherFamily">기타 가족</label>
+                <textarea id="inputOtherFamily" rows="3" placeholder="예: 오빠: 서울대 법대 박사 재학. 국내 로펌 근무&#10;동생: ..."></textarea>
+              </div>
+            </div>
+          </section>
+
+          <!-- 경제력 -->
+          <section class="form-section">
+            <h3>경제력</h3>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="inputPersonalWealth">본인 경제력</label>
+                <input type="text" id="inputPersonalWealth" placeholder="예: 50억" />
+              </div>
+              <div class="form-group">
+                <label for="inputFamilyWealth">가족 경제력</label>
+                <input type="text" id="inputFamilyWealth" placeholder="예: 500억(회사 미반영)" />
+              </div>
+            </div>
+          </section>
+
+          <!-- 성격 / 특이사항 -->
+          <section class="form-section">
+            <h3>성격 / 특이사항</h3>
+            <div class="form-group">
+              <textarea id="inputPersonality" rows="3" placeholder="예: 배려심 많고 밝은 성격."></textarea>
+            </div>
+          </section>
+
+          <!-- 이성상 -->
+          <section class="form-section">
+            <h3>이성상 (희망 상대)</h3>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="inputIdealAge">희망 나이</label>
+                <input type="text" id="inputIdealAge" placeholder="예: 동갑~5살 연상" />
+              </div>
+              <div class="form-group">
+                <label for="inputIdealHeight">희망 키</label>
+                <input type="text" id="inputIdealHeight" placeholder="예: 175cm 이상" />
+              </div>
+              <div class="form-group">
+                <label for="inputIdealJob">희망 직업</label>
+                <input type="text" id="inputIdealJob" placeholder="예: 의사, 변호사, 사업가" />
+              </div>
+              <div class="form-group">
+                <label for="inputIdealReligion">희망 종교</label>
+                <input type="text" id="inputIdealReligion" placeholder="예: 무관, 기독교" />
+              </div>
+              <div class="form-group">
+                <label for="inputIdealResidence">희망 거주지</label>
+                <input type="text" id="inputIdealResidence" placeholder="예: 서울, 해외 무관" />
+              </div>
+              <div class="form-group">
+                <label for="inputIdealEducation">희망 학력</label>
+                <input type="text" id="inputIdealEducation" placeholder="예: 대졸 이상" />
+              </div>
+              <div class="form-group form-group-full">
+                <label for="inputIdealEtc">기타 희망 사항</label>
+                <textarea id="inputIdealEtc" rows="3" placeholder="자유롭게 입력하세요. 예: 가족과의 관계가 좋은 분, 취미가 맞는 분..."></textarea>
+              </div>
+            </div>
+          </section>
+
+          <!-- 소개 주기 설정 -->
+          <section class="form-section">
+            <h3>알람 설정</h3>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="inputIntroInterval">소개 주기 (일)</label>
+                <input type="number" id="inputIntroInterval" value="30" min="1" max="365" />
+                <small class="form-hint">이 기간이 지나면 소개 알람이 울립니다</small>
+              </div>
+            </div>
+          </section>
+
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" id="btnCancelForm">취소</button>
+        <button type="button" class="btn btn-primary" id="btnSaveMember">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 토스트 알림 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

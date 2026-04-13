@@ -1,0 +1,16 @@
+{
+  "name": "member-management-app",
+  "version": "1.0.0",
+  "description": "회원 관리 데스크탑 앱",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^28.0.0"
+  }
+}
