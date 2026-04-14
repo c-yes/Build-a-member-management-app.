@@ -41,6 +41,16 @@ const els = {
 // 유틸리티 함수
 // ============================================
 
+// 현재 폼에서 선택/설정된 사진 경로
+let formPhotoPath = null;
+
+// 로컬 파일 경로를 file:// URL로 변환 (Windows 백슬래시 대응)
+function fileToUrl(filePath) {
+  if (!filePath) return '';
+  const normalized = filePath.replace(/\\/g, '/');
+  return normalized.startsWith('/') ? `file://${normalized}` : `file:///${normalized}`;
+}
+
 function generateMaskedName(name) {
   if (!name || name.trim().length === 0) return '';
   const trimmed = name.trim();
@@ -233,8 +243,12 @@ function renderMemberList() {
       member.residence || ''
     ].filter(Boolean).join(' · ');
 
+    const avatarHtml = member.photoPath
+      ? `<div class="member-avatar"><img src="${fileToUrl(member.photoPath)}" alt="" /></div>`
+      : `<div class="member-avatar">${escapeHtml(firstChar)}</div>`;
+
     li.innerHTML = `
-      <div class="member-avatar">${escapeHtml(firstChar)}</div>
+      ${avatarHtml}
       <div class="member-item-info">
         <div class="member-item-name">${escapeHtml(member.name || '이름 없음')}</div>
         <div class="member-item-sub">${escapeHtml(subText || '정보 없음')}</div>
@@ -287,6 +301,17 @@ function selectMember(id) {
     els.detailIntroStatus.textContent = '';
   }
 
+  // 사진
+  const photoWrap = $('detailPhotoWrap');
+  const photoImg = $('detailPhotoImg');
+  if (member.photoPath) {
+    photoImg.src = fileToUrl(member.photoPath);
+    photoWrap.style.display = 'block';
+  } else {
+    photoImg.src = '';
+    photoWrap.style.display = 'none';
+  }
+
   // 프로필 텍스트
   els.profilePreview.textContent = buildProfileText(member);
 
@@ -329,6 +354,7 @@ function resetForm() {
   els.educationList.innerHTML = '';
   state.educationCount = 0;
   addEducationRow(); // 기본 1개
+  setFormPhoto(null);
 }
 
 function fillForm(member) {
@@ -363,6 +389,9 @@ function fillForm(member) {
   } else {
     addEducationRow();
   }
+
+  // 사진
+  setFormPhoto(member.photoPath || null);
 }
 
 function addEducationRow(data = {}) {
@@ -434,6 +463,7 @@ function collectFormData() {
     idealEducation: $('inputIdealEducation').value.trim(),
     idealEtc: $('inputIdealEtc').value.trim(),
     introInterval: parseInt($('inputIntroInterval').value) || 30,
+    photoPath: formPhotoPath || '',
   };
 }
 
@@ -568,6 +598,26 @@ async function copyProfile(id) {
 }
 
 // ============================================
+// 사진 폼 헬퍼
+// ============================================
+function setFormPhoto(photoPath) {
+  formPhotoPath = photoPath || null;
+  const previewWrap = $('photoPreviewWrap');
+  const placeholder = $('photoPlaceholder');
+  const previewImg = $('photoFormPreview');
+
+  if (formPhotoPath) {
+    previewImg.src = fileToUrl(formPhotoPath);
+    previewWrap.style.display = 'flex';
+    placeholder.style.display = 'none';
+  } else {
+    previewImg.src = '';
+    previewWrap.style.display = 'none';
+    placeholder.style.display = 'flex';
+  }
+}
+
+// ============================================
 // 이벤트 리스너 연결
 // ============================================
 function bindEvents() {
@@ -625,6 +675,46 @@ function bindEvents() {
   // 데이터 폴더 열기
   $('btnOpenFolder').addEventListener('click', () => {
     window.electronAPI.openDataFolder();
+  });
+
+  // ─ 사진: 폴더에서 선택
+  $('btnSelectPhoto').addEventListener('click', async () => {
+    const photoPath = await window.electronAPI.selectPhoto();
+    if (photoPath) setFormPhoto(photoPath);
+  });
+
+  // ─ 사진: 사진 제거
+  $('btnRemovePhoto').addEventListener('click', () => setFormPhoto(null));
+
+  // ─ 사진: 드래그 앤 드롭
+  const dropZone = $('photoDropZone');
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', (e) => {
+    if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over');
+  });
+
+  dropZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (!file || !file.type.startsWith('image/')) {
+      toast('이미지 파일만 가능합니다.', 'error');
+      return;
+    }
+    // FileReader로 base64 변환 후 메인 프로세스에서 저장
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target.result;
+      const ext = file.name.split('.').pop() || 'jpg';
+      const savedPath = await window.electronAPI.savePhotoData(dataUrl, ext);
+      if (savedPath) setFormPhoto(savedPath);
+    };
+    reader.readAsDataURL(file);
   });
 
   // 텍스트 자동입력 토글

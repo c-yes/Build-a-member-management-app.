@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' file: data:;" />
   <title>회원 관리 시스템</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -46,12 +46,17 @@
     <!-- 회원 상세 뷰 -->
     <div class="member-detail" id="memberDetail" style="display:none;">
       <div class="detail-header">
-        <div class="detail-title-area">
-          <h2 class="detail-name" id="detailName"></h2>
-          <div class="detail-badges">
-            <span class="badge badge-masked" id="detailMaskedName"></span>
-            <span class="badge badge-date" id="detailAddedDate"></span>
-            <span class="badge" id="detailIntroStatus"></span>
+        <div class="detail-left">
+          <div class="detail-photo-wrap" id="detailPhotoWrap" style="display:none;">
+            <img id="detailPhotoImg" class="detail-photo-img" src="" alt="" />
+          </div>
+          <div class="detail-title-area">
+            <h2 class="detail-name" id="detailName"></h2>
+            <div class="detail-badges">
+              <span class="badge badge-masked" id="detailMaskedName"></span>
+              <span class="badge badge-date" id="detailAddedDate"></span>
+              <span class="badge" id="detailIntroStatus"></span>
+            </div>
           </div>
         </div>
         <div class="detail-actions">
@@ -117,6 +122,22 @@ Mayo Clinic 의과대학 재학 중
             <div class="paste-actions">
               <button type="button" class="btn btn-primary" id="btnApplyPaste">✨ 폼에 자동입력</button>
               <button type="button" class="btn btn-ghost" id="btnClearPaste">지우기</button>
+            </div>
+          </section>
+
+          <!-- 사진 -->
+          <section class="form-section">
+            <h3>사진</h3>
+            <div class="photo-upload-area" id="photoDropZone">
+              <div class="photo-preview-wrap" id="photoPreviewWrap" style="display:none;">
+                <img id="photoFormPreview" class="photo-form-img" src="" alt="프로필 사진" />
+                <button type="button" class="photo-remove-btn" id="btnRemovePhoto">✕ 사진 제거</button>
+              </div>
+              <div class="photo-placeholder" id="photoPlaceholder">
+                <span class="photo-placeholder-icon">📷</span>
+                <p>여기에 사진을 끌어다 놓거나</p>
+                <button type="button" class="btn btn-sm btn-outline" id="btnSelectPhoto">폴더에서 선택</button>
+              </div>
             </div>
           </section>
 

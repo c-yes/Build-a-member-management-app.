@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   testNotification: () => ipcRenderer.invoke('test-notification'),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),
 
+  // 사진 관련
+  selectPhoto: () => ipcRenderer.invoke('select-photo'),
+  savePhotoData: (dataUrl, ext) => ipcRenderer.invoke('save-photo-data', dataUrl, ext),
+  deletePhoto: (photoPath) => ipcRenderer.invoke('delete-photo', photoPath),
+
   // 알람 수신 (메인 → 렌더러)
   onHighlightMember: (callback) => {
     ipcRenderer.on('highlight-member', (event, memberId) => callback(memberId));

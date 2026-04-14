@@ -193,3 +193,46 @@ ipcMain.handle('open-data-folder', () => {
   shell.showItemInFolder(dataFilePath);
   return { success: true };
 });
+
+// ─── 사진 관련 ───
+
+function getPhotosDir() {
+  const dir = path.join(userDataPath, 'photos');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+// IPC 핸들러: 파일 다이얼로그로 사진 선택 후 복사
+ipcMain.handle('select-photo', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '프로필 사진 선택',
+    filters: [{ name: '이미지', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }],
+    properties: ['openFile']
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  const srcPath = result.filePaths[0];
+  const ext = path.extname(srcPath) || '.jpg';
+  const destName = `photo_${Date.now()}${ext}`;
+  const destPath = path.join(getPhotosDir(), destName);
+  fs.copyFileSync(srcPath, destPath);
+  return destPath;
+});
+
+// IPC 핸들러: 드래그 앤 드롭으로 받은 base64 이미지 저장
+ipcMain.handle('save-photo-data', async (event, dataUrl, ext) => {
+  const base64 = dataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
+  const destName = `photo_${Date.now()}.${ext || 'jpg'}`;
+  const destPath = path.join(getPhotosDir(), destName);
+  fs.writeFileSync(destPath, Buffer.from(base64, 'base64'));
+  return destPath;
+});
+
+// IPC 핸들러: 사진 파일 삭제
+ipcMain.handle('delete-photo', async (event, photoPath) => {
+  try {
+    if (photoPath && fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
+    return { success: true };
+  } catch (e) {
+    return { success: false };
+  }
+});
