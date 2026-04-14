@@ -722,6 +722,50 @@ function parseEduLine(line) {
   return { school, major, status };
 }
 
+function parseEduLineFlexible(line) {
+  const original = line.trim();
+
+  // 상태 감지
+  let status = '졸';
+  if (/재학/.test(original)) status = '재학 중';
+  else if (/졸업예정|내년\s*졸업/.test(original)) status = '졸업예정';
+  else if (/수료/.test(original)) status = '수료';
+  else if (/중퇴/.test(original)) status = '중퇴';
+
+  // 학교 키워드 위치 탐색 — 마지막 학교 키워드까지를 학교명으로
+  const SCHOOL_SUFFIXES = ['대학원', '대학교', '고등학교', '중학교', '초등학교', '대학'];
+  let lastEnd = -1;
+
+  for (const sfx of SCHOOL_SUFFIXES) {
+    let pos = 0;
+    while (true) {
+      const idx = original.indexOf(sfx, pos);
+      if (idx === -1) break;
+      const end = idx + sfx.length;
+      // 괄호(NYU 등) 포함
+      const parenMatch = original.slice(end).match(/^\s*\([^)]*\)/);
+      const actualEnd = parenMatch ? end + parenMatch[0].length : end;
+      if (actualEnd > lastEnd) lastEnd = actualEnd;
+      pos = idx + 1;
+    }
+  }
+
+  let school = original;
+  let major = '';
+
+  if (lastEnd > 0) {
+    school = original.slice(0, lastEnd).trim();
+    const rest = original.slice(lastEnd).trim();
+    // 전공: 첫 구분자 앞 단어
+    const majorRaw = rest.split(/[.·\/\s\d]/)[0].trim();
+    if (majorRaw && !/^(재학|졸업|수료|중퇴)/.test(majorRaw)) {
+      major = majorRaw;
+    }
+  }
+
+  return { school, major, status };
+}
+
 function parseProfileText(rawText) {
   const result = {};
   const lines = rawText.split('\n').map(l => l.trim());
@@ -733,13 +777,42 @@ function parseProfileText(rawText) {
   for (const line of lines) {
     if (!line) { inEducation = false; continue; }
 
+    // ── 복합 줄: "홍00/98년/뉴욕시거주" (이름/년도/거주지 슬래시 구분)
+    if (line.includes('/') && !result.name) {
+      const parts = line.split('/').map(p => p.trim());
+      const namePart = parts[0];
+      const hasYear = parts.some(p => /^\d{2,4}년생?$/.test(p));
+      const hasRes = parts.some(p => p.includes('거주'));
+      if ((hasYear || hasRes) && namePart && /^[가-힣0-9]{1,6}$/.test(namePart)
+          && !/\d{2,4}년/.test(namePart) && !namePart.includes('거주')) {
+        result.name = namePart;
+        for (const part of parts.slice(1)) {
+          const ym = part.match(/^(\d{2,4})년생?$/);
+          if (ym && !result.birthYear) result.birthYear = ym[1] + '년생';
+          if (part.includes('거주') && !result.residence) {
+            result.residence = part.replace(/거주지?/g, '').replace(/\s+/g, ' ').trim();
+          }
+        }
+        if (result.name || result.birthYear || result.residence) continue;
+      }
+    }
+
     // ── 이름: "홍길동 님" 형태, ** 없고 15자 이하
     if ((line.endsWith(' 님') || line.endsWith('님')) && !line.includes('*') && line.length <= 15) {
       const name = line.replace(/\s*님\s*$/, '').trim();
       if (name && !result.name) { result.name = name; continue; }
     }
 
-    // ── 마스킹 이름 건너뜀
+    // ── 마스킹 이름: "홍**" 또는 "홍** 님" — 이름 없을 때만 첫 글자 활용
+    if (/^[가-힣]{1,2}\*+(\s*님)?$/.test(line)) {
+      if (!result.name) {
+        const hint = line.replace(/\*/g, '').replace(/\s*님\s*$/, '').trim();
+        if (hint) result.name = hint + '**';
+      }
+      continue;
+    }
+
+    // ── 기타 ** 포함 라인 건너뜀
     if (line.includes('**')) continue;
 
     // ── 출생연도: 96년생 / 1996년생 / 1996
@@ -780,14 +853,18 @@ function parseProfileText(rawText) {
       otherFamilyLines.push(line); inEducation = false; continue;
     }
 
-    // ── 거주지 포함 줄 (압축형: "서울거주지-종구", "서울 거주지")
-    if (line.includes('거주지') && !result.residence) {
-      const clean = line.split(/[\/·•]/)[0]
-        .replace(/거주지\s*[-：:]/g, ' ')
+    // ── 거주지 포함 줄 (압축형: "서울거주지ㅡ중구", "서울 거주지")
+    // ㅡ (U+3161, 한글 자모) 도 구분자로 처리; 두 번째 거주지 줄은 본가(hometown)로
+    if (line.includes('거주지')) {
+      const clean = line.split(/[\/·•\u3161]/)[0]
+        .replace(/거주지\s*[-：:\u3161]/g, ' ')
         .replace(/거주지/g, '')
-        .replace(/-/g, ' ')
+        .replace(/[-\u3161]/g, ' ')
         .trim();
-      if (clean) result.residence = clean;
+      if (clean) {
+        if (!result.residence) result.residence = clean;
+        else if (!result.hometown) result.hometown = clean;
+      }
       // 같은 줄에 집안자산이 있으면 추출
       if ((m = line.match(/집안자산\s*(\d+억)/))) {
         if (!result.familyWealth) result.familyWealth = m[1];
@@ -840,6 +917,12 @@ function parseProfileText(rawText) {
     // ── 콜론 없는 줄 (학력 섹션 계속)
     if (inEducation) {
       const edu = parseEduLine(line); if (edu.school) educations.push(edu); continue;
+    }
+
+    // ── 학교 키워드 포함 자유형 줄: "뉴욕대학교(NYU) 치과대학원 치의학석사..."
+    if (!line.includes(':') && /대학원|대학교|고등학교|중학교|초등학교/.test(line)) {
+      const edu = parseEduLineFlexible(line);
+      if (edu.school) { educations.push(edu); inEducation = true; continue; }
     }
 
     // ── 나머지 → 성격/특이사항
