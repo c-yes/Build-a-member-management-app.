@@ -627,6 +627,40 @@ function bindEvents() {
     window.electronAPI.openDataFolder();
   });
 
+  // 텍스트 자동입력 토글
+  $('btnTogglePaste').addEventListener('click', () => {
+    const section = $('pasteSection');
+    const isHidden = section.style.display === 'none';
+    section.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+      $('pasteInput').focus();
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+
+  // 자동입력 적용
+  $('btnApplyPaste').addEventListener('click', () => {
+    const text = $('pasteInput').value.trim();
+    if (!text) {
+      toast('텍스트를 붙여넣어 주세요.', 'error');
+      return;
+    }
+    const parsed = parseProfileText(text);
+    if (!parsed.name && Object.keys(parsed).length === 0) {
+      toast('인식된 정보가 없습니다. 형식을 확인해주세요.', 'error');
+      return;
+    }
+    const count = applyParsedToForm(parsed);
+    $('pasteSection').style.display = 'none';
+    toast(`${count}개 항목이 자동으로 입력되었습니다. 확인 후 저장해주세요.`, 'success');
+  });
+
+  // 텍스트 지우기
+  $('btnClearPaste').addEventListener('click', () => {
+    $('pasteInput').value = '';
+    $('pasteInput').focus();
+  });
+
   // 키보드 단축키
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeModal();
@@ -642,6 +676,173 @@ function bindEvents() {
     const member = state.members.find(m => m.id === memberId);
     if (member) toast(`${member.name} 님 소개 알람`, 'success');
   });
+}
+
+// ============================================
+// 텍스트 자동 파싱
+// ============================================
+
+const STATUS_WORDS = ['재학 중', '졸업예정', '수료', '중퇴', '졸'];
+const KNOWN_KEYS = new Set([
+  '거주지', '본가', '신장', '종교', '취미', '학력',
+  '형제관계', '부', '모', '본인경제력', '가족 경제력', '가족경제력'
+]);
+const FAMILY_WORDS = ['오빠', '언니', '형', '동생', '남동생', '여동생', '누나', '남매'];
+
+function parseEduLine(line) {
+  let status = '졸';
+  let rest = line.trim();
+
+  for (const s of STATUS_WORDS) {
+    if (rest.endsWith(s)) {
+      status = s;
+      rest = rest.slice(0, -s.length).trim();
+      break;
+    }
+  }
+
+  const tokens = rest.split(/\s+/);
+  let school = rest;
+  let major = '';
+
+  if (tokens.length >= 2) {
+    const last = tokens[tokens.length - 1];
+    // 전공처럼 보이는 단어: 학과/대학/대학원/부/과 로 끝나는 경우
+    if (/[과부]$/.test(last) || last.endsWith('학과') || last.endsWith('대학') ||
+        last.endsWith('대학원') || last.endsWith('의과대학') || last.endsWith('학부')) {
+      major = last;
+      school = tokens.slice(0, -1).join(' ');
+    }
+  }
+
+  return { school, major, status };
+}
+
+function parseProfileText(rawText) {
+  const result = {};
+  const lines = rawText.split('\n').map(l => l.trim());
+  const educations = [];
+  const otherFamilyLines = [];
+  const personalityLines = [];
+  let inEducation = false;
+
+  for (const line of lines) {
+    if (!line) continue;
+
+    // 이름 (X 님 형태이고 ** 없는 것)
+    if ((line.endsWith(' 님') || line.endsWith('님')) && !line.includes('*')) {
+      const name = line.replace(/\s*님\s*$/, '').trim();
+      if (name && !result.name) result.name = name;
+      continue;
+    }
+
+    // 마스킹 이름 건너뜀
+    if (line.includes('**')) continue;
+
+    // 출생연도 (96년생, 1996년생, 1996 등)
+    if (/^\d{2,4}년생$/.test(line) || /^(19|20)\d{2}$/.test(line)) {
+      result.birthYear = line;
+      inEducation = false;
+      continue;
+    }
+
+    // 콜론이 있는 줄
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const key = line.slice(0, colonIdx).trim();
+      const value = line.slice(colonIdx + 1).trim();
+
+      if (KNOWN_KEYS.has(key)) {
+        if (key !== '학력') inEducation = false;
+
+        switch (key) {
+          case '거주지':       result.residence = value; break;
+          case '본가':         result.hometown = value; break;
+          case '신장':         result.height = value; break;
+          case '종교':         result.religion = value; break;
+          case '취미':         result.hobbies = value; break;
+          case '형제관계':     result.siblings = value; break;
+          case '부':           result.father = value; break;
+          case '모':           result.mother = value; break;
+          case '본인경제력':   result.personalWealth = value; break;
+          case '가족 경제력':
+          case '가족경제력':   result.familyWealth = value; break;
+          case '학력':
+            inEducation = true;
+            if (value) {
+              const edu = parseEduLine(value);
+              if (edu.school) educations.push(edu);
+            }
+            break;
+        }
+        continue;
+      }
+
+      // 가족 관계 키워드 (오빠, 언니 등)
+      if (FAMILY_WORDS.some(w => key === w || key.startsWith(w))) {
+        inEducation = false;
+        otherFamilyLines.push(line);
+        continue;
+      }
+
+      // 학력 섹션 중 콜론이 포함된 줄 (예: 학교명에 콜론 포함)
+      if (inEducation) {
+        const edu = parseEduLine(line);
+        if (edu.school) educations.push(edu);
+        continue;
+      }
+    }
+
+    // 콜론 없는 줄
+    if (inEducation) {
+      const edu = parseEduLine(line);
+      if (edu.school) educations.push(edu);
+      continue;
+    }
+
+    // 이름이 이미 파싱됐고 다른 패턴에 안 걸린 줄 → 성격/특이사항
+    if (result.name) {
+      personalityLines.push(line);
+    }
+  }
+
+  if (educations.length > 0) result.educations = educations;
+  if (otherFamilyLines.length > 0) result.otherFamily = otherFamilyLines.join('\n');
+  if (personalityLines.length > 0) result.personality = personalityLines.join('\n');
+
+  return result;
+}
+
+function applyParsedToForm(parsed) {
+  if (parsed.name)           $('inputName').value = parsed.name;
+  if (parsed.birthYear)      $('inputBirthYear').value = parsed.birthYear;
+  if (parsed.residence)      $('inputResidence').value = parsed.residence;
+  if (parsed.hometown)       $('inputHometown').value = parsed.hometown;
+  if (parsed.height)         $('inputHeight').value = parsed.height;
+  if (parsed.religion)       $('inputReligion').value = parsed.religion;
+  if (parsed.hobbies)        $('inputHobbies').value = parsed.hobbies;
+  if (parsed.siblings)       $('inputSiblings').value = parsed.siblings;
+  if (parsed.father)         $('inputFather').value = parsed.father;
+  if (parsed.mother)         $('inputMother').value = parsed.mother;
+  if (parsed.otherFamily)    $('inputOtherFamily').value = parsed.otherFamily;
+  if (parsed.personalWealth) $('inputPersonalWealth').value = parsed.personalWealth;
+  if (parsed.familyWealth)   $('inputFamilyWealth').value = parsed.familyWealth;
+  if (parsed.personality)    $('inputPersonality').value = parsed.personality;
+
+  // 학력 채우기
+  if (parsed.educations && parsed.educations.length > 0) {
+    els.educationList.innerHTML = '';
+    state.educationCount = 0;
+    parsed.educations.forEach(edu => addEducationRow(edu));
+  }
+
+  // 파싱된 필드 수 계산
+  const filled = Object.keys(parsed).filter(k =>
+    k !== 'educations' && k !== 'otherFamily' && k !== 'personality' && parsed[k]
+  ).length +
+  (parsed.educations ? parsed.educations.length : 0);
+
+  return filled;
 }
 
 // ============================================

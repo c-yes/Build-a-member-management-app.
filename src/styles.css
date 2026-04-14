@@ -416,6 +416,12 @@ body {
   flex-shrink: 0;
 }
 
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .modal-header h2 {
   font-size: 18px;
   font-weight: 700;
@@ -709,6 +715,32 @@ textarea {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* 텍스트 자동입력 섹션 */
+.paste-section {
+  background: var(--primary-light);
+  border-radius: var(--border-radius-lg);
+  padding: 16px 20px;
+  border: 1px solid #c7d2fe;
+}
+
+.paste-section h3 {
+  color: var(--primary-dark);
+}
+
+.paste-section textarea {
+  font-size: 12px;
+  font-family: 'Consolas', 'D2Coding', monospace;
+  line-height: 1.7;
+  background: #fff;
+  min-height: 160px;
+}
+
+.paste-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 /* ============================================

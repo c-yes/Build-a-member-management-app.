@@ -78,10 +78,48 @@
     <div class="modal">
       <div class="modal-header">
         <h2 id="modalTitle">회원 등록</h2>
-        <button class="modal-close" id="modalClose">✕</button>
+        <div class="modal-header-actions">
+          <button type="button" class="btn btn-sm btn-outline" id="btnTogglePaste">📋 텍스트로 자동입력</button>
+          <button class="modal-close" id="modalClose">✕</button>
+        </div>
       </div>
       <div class="modal-body">
         <form id="memberForm">
+          <!-- 텍스트 자동입력 섹션 -->
+          <section class="form-section paste-section" id="pasteSection" style="display:none;">
+            <h3>텍스트 붙여넣기로 자동입력</h3>
+            <div class="form-group">
+              <label for="pasteInput">아래에 회원 정보 텍스트를 붙여넣고 "폼에 자동입력" 버튼을 누르세요</label>
+              <textarea id="pasteInput" rows="10" placeholder="예시:
+신지원 님
+
+96년생
+거주지: 미국
+본가: 삼성동
+신장: 168cm
+종교: 기독교
+취미: 첼로, 헬스, 독서
+
+학력: 대원 외국어고 졸
+Yale 생물학과 졸
+Mayo Clinic 의과대학 재학 중
+
+형제관계: 1남 1녀 중 둘째
+부: 고려대. 조지워싱턴 졸. 현)사업
+모: KIST 졸. 전)교수
+오빠: 서울대 법대 박사 재학. 국내 로펌 근무
+
+본인경제력: 50억
+가족 경제력: 500억(회사 미반영)
+
+배려심 많고 밝은 성격."></textarea>
+            </div>
+            <div class="paste-actions">
+              <button type="button" class="btn btn-primary" id="btnApplyPaste">✨ 폼에 자동입력</button>
+              <button type="button" class="btn btn-ghost" id="btnClearPaste">지우기</button>
+            </div>
+          </section>
+
           <!-- 기본 정보 -->
           <section class="form-section">
             <h3>기본 정보</h3>
