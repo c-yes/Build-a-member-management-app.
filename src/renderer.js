@@ -646,7 +646,11 @@ function bindEvents() {
       return;
     }
     const parsed = parseProfileText(text);
-    if (!parsed.name && Object.keys(parsed).length === 0) {
+    const hasData = parsed.name || parsed.height || parsed.birthYear ||
+      parsed.residence || parsed.siblings || parsed.father || parsed.mother ||
+      parsed.personalWealth || parsed.familyWealth ||
+      (parsed.educations && parsed.educations.length > 0) || parsed.personality;
+    if (!hasData) {
       toast('인식된 정보가 없습니다. 형식을 확인해주세요.', 'error');
       return;
     }
@@ -727,26 +731,76 @@ function parseProfileText(rawText) {
   let inEducation = false;
 
   for (const line of lines) {
-    if (!line) continue;
+    if (!line) { inEducation = false; continue; }
 
-    // 이름 (X 님 형태이고 ** 없는 것)
-    if ((line.endsWith(' 님') || line.endsWith('님')) && !line.includes('*')) {
+    // ── 이름: "홍길동 님" 형태, ** 없고 15자 이하
+    if ((line.endsWith(' 님') || line.endsWith('님')) && !line.includes('*') && line.length <= 15) {
       const name = line.replace(/\s*님\s*$/, '').trim();
-      if (name && !result.name) result.name = name;
-      continue;
+      if (name && !result.name) { result.name = name; continue; }
     }
 
-    // 마스킹 이름 건너뜀
+    // ── 마스킹 이름 건너뜀
     if (line.includes('**')) continue;
 
-    // 출생연도 (96년생, 1996년생, 1996 등)
+    // ── 출생연도: 96년생 / 1996년생 / 1996
     if (/^\d{2,4}년생$/.test(line) || /^(19|20)\d{2}$/.test(line)) {
-      result.birthYear = line;
-      inEducation = false;
+      result.birthYear = line; inEducation = false; continue;
+    }
+
+    // ── 키/신장: "키169", "키169cm", "신장169cm", "169cm"
+    let m;
+    if ((m = line.match(/^키\s*(\d{2,3})(cm)?$/i))) { result.height = m[1] + 'cm'; continue; }
+    if ((m = line.match(/^신장\s*[:：]?\s*(\d{2,3})(cm)?$/))) { result.height = m[1] + 'cm'; continue; }
+    if ((m = line.match(/^(\d{2,3})cm$/))) { result.height = m[1] + 'cm'; continue; }
+
+    // ── 형제관계 (다양한 압축형)
+    if (
+      /^[1-5][남녀]중/.test(line) ||
+      /^[1-5]남[1-5]녀/.test(line) ||
+      /^외(동딸|아들)$/.test(line) ||
+      (/중(장녀|차녀|막내|첫째|둘째|셋째|넷째)/.test(line) && line.length < 20)
+    ) {
+      if (!result.siblings) { result.siblings = line; continue; }
+    }
+
+    // ── 부친/부 패턴
+    if (/^부친/.test(line)) {
+      result.father = line.replace(/^부친\s*[\/·•\s]*/, '').trim();
+      inEducation = false; continue;
+    }
+
+    // ── 모친/모 패턴
+    if (/^모친/.test(line)) {
+      result.mother = line.replace(/^모친\s*[\/·•\s]*/, '').trim();
+      inEducation = false; continue;
+    }
+
+    // ── 가족 관계 키워드로 시작 (오빠, 언니, 형부 등)
+    if (/^(오빠|언니|형|동생|남동생|여동생|누나|형부|제부|올케|남매)/.test(line)) {
+      otherFamilyLines.push(line); inEducation = false; continue;
+    }
+
+    // ── 거주지 포함 줄 (압축형: "서울거주지-종구", "서울 거주지")
+    if (line.includes('거주지') && !result.residence) {
+      const clean = line.split(/[\/·•]/)[0]
+        .replace(/거주지\s*[-：:]/g, ' ')
+        .replace(/거주지/g, '')
+        .replace(/-/g, ' ')
+        .trim();
+      if (clean) result.residence = clean;
+      // 같은 줄에 집안자산이 있으면 추출
+      if ((m = line.match(/집안자산\s*(\d+억)/))) {
+        if (!result.familyWealth) result.familyWealth = m[1];
+      }
       continue;
     }
 
-    // 콜론이 있는 줄
+    // ── 집안자산/가족자산 독립 줄
+    if ((m = (line.match(/집안자산\s*(\d+억)/) || line.match(/가족자산\s*(\d+억)/)))) {
+      if (!result.familyWealth) result.familyWealth = m[1];
+    }
+
+    // ── 표준 key:value 패턴
     const colonIdx = line.indexOf(':');
     if (colonIdx > 0) {
       const key = line.slice(0, colonIdx).trim();
@@ -754,56 +808,42 @@ function parseProfileText(rawText) {
 
       if (KNOWN_KEYS.has(key)) {
         if (key !== '학력') inEducation = false;
-
         switch (key) {
-          case '거주지':       result.residence = value; break;
-          case '본가':         result.hometown = value; break;
-          case '신장':         result.height = value; break;
-          case '종교':         result.religion = value; break;
-          case '취미':         result.hobbies = value; break;
-          case '형제관계':     result.siblings = value; break;
-          case '부':           result.father = value; break;
-          case '모':           result.mother = value; break;
-          case '본인경제력':   result.personalWealth = value; break;
+          case '거주지':     result.residence = value; break;
+          case '본가':       result.hometown = value; break;
+          case '신장':       result.height = value; break;
+          case '종교':       result.religion = value; break;
+          case '취미':       result.hobbies = value; break;
+          case '형제관계':   result.siblings = value; break;
+          case '부':         result.father = value; break;
+          case '모':         result.mother = value; break;
+          case '본인경제력': result.personalWealth = value; break;
           case '가족 경제력':
-          case '가족경제력':   result.familyWealth = value; break;
+          case '가족경제력': result.familyWealth = value; break;
           case '학력':
             inEducation = true;
-            if (value) {
-              const edu = parseEduLine(value);
-              if (edu.school) educations.push(edu);
-            }
+            if (value) { const edu = parseEduLine(value); if (edu.school) educations.push(edu); }
             break;
         }
         continue;
       }
 
-      // 가족 관계 키워드 (오빠, 언니 등)
       if (FAMILY_WORDS.some(w => key === w || key.startsWith(w))) {
-        inEducation = false;
-        otherFamilyLines.push(line);
-        continue;
+        inEducation = false; otherFamilyLines.push(line); continue;
       }
 
-      // 학력 섹션 중 콜론이 포함된 줄 (예: 학교명에 콜론 포함)
       if (inEducation) {
-        const edu = parseEduLine(line);
-        if (edu.school) educations.push(edu);
-        continue;
+        const edu = parseEduLine(line); if (edu.school) educations.push(edu); continue;
       }
     }
 
-    // 콜론 없는 줄
+    // ── 콜론 없는 줄 (학력 섹션 계속)
     if (inEducation) {
-      const edu = parseEduLine(line);
-      if (edu.school) educations.push(edu);
-      continue;
+      const edu = parseEduLine(line); if (edu.school) educations.push(edu); continue;
     }
 
-    // 이름이 이미 파싱됐고 다른 패턴에 안 걸린 줄 → 성격/특이사항
-    if (result.name) {
-      personalityLines.push(line);
-    }
+    // ── 나머지 → 성격/특이사항
+    personalityLines.push(line);
   }
 
   if (educations.length > 0) result.educations = educations;
